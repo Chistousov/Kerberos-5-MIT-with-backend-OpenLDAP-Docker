@@ -1,0 +1,378 @@
+version: "2.4"
+
+services:
+  
+  # # restore openldap config from backup
+  # openldap-restore-config-backup-db:
+  #   image: alpine:3.18.0
+  #   entrypoint: ["/bin/sh", "-c", "/restore-backup.sh && touch /OK"] 
+  #   restart: on-failure
+  #   container_name: openldap-restore-config-backup-db
+  #   volumes:
+  #     - type: bind
+  #       source: restore-backup.sh
+  #       target: /restore-backup.sh
+  #       read_only: true
+
+  #     - type: volume
+  #       source: openldap-config-backup-volume
+  #       target: /archive
+
+  #     - type: volume
+  #       source: openldap-config-volume
+  #       target: /backup
+  #   healthcheck:
+  #     test: '[ -f ./OK ] || exit 1'
+  #     interval: 1m
+  #     timeout: 10s
+  #     retries: 100
+
+  # # backup
+  # openldap-config-backup-db:
+  #   image: offen/docker-volume-backup:v2.27.0
+  #   restart: always
+  #   container_name: openldap-config-backup-db
+  #   environment:
+  #     - BACKUP_CRON_EXPRESSION=50 16 * * 4
+  #     - BACKUP_FILENAME=openldap-config-backup-db-%Y-%m-%dT%H-%M-%S.tar.gz
+  #     - BACKUP_RETENTION_DAYS=30
+  #     # - NOTIFICATION_URLS=smtp://somesmtp:25/?fromAddress=backup@example.com&toAddresses=chistousov@example.com
+  #     - EXEC_FORWARD_OUTPUT=true
+  #     - BACKUP_STOP_CONTAINER_LABEL=openldap-config-backup-db-stop-label
+  #   volumes:
+  #     # что backupИТЬ
+  #     - type: volume
+  #       source: openldap-config-volume
+  #       target: /backup
+  #       read_only: true
+      
+  #     - type: bind
+  #       source: /var/run/docker.sock
+  #       target: /var/run/docker.sock
+  #       read_only: true
+
+  #     # куда backupИТЬ
+  #     - type: volume
+  #       source: openldap-config-backup-volume
+  #       target: /archive
+
+  #     - type: bind
+  #       source: /etc/timezone
+  #       target: /etc/timezone
+  #       read_only: true
+
+  #     - type: bind
+  #       source: /etc/localtime
+  #       target: /etc/localtime
+  #       read_only: true
+
+  # # restore database config from backup
+  # openldap-restore-database-backup-db:
+  #   image: alpine:3.18.0
+  #   entrypoint: ["/bin/sh", "-c", "/restore-backup.sh && touch /OK"] 
+  #   restart: on-failure
+  #   container_name: openldap-restore-database-backup-db
+  #   volumes:
+  #     - type: bind
+  #       source: restore-backup.sh
+  #       target: /restore-backup.sh
+  #       read_only: true
+
+  #     - type: volume
+  #       source: openldap-database-backup-volume
+  #       target: /archive
+
+  #     - type: volume
+  #       source: openldap-database-volume
+  #       target: /backup
+  #   healthcheck:
+  #     test: '[ -f ./OK ] || exit 1'
+  #     interval: 1m
+  #     timeout: 10s
+  #     retries: 100
+
+  # # backup
+  # openldap-database-backup-db:
+  #   image: offen/docker-volume-backup:v2.27.0
+  #   restart: always
+  #   container_name: openldap-database-backup-db
+  #   environment:
+  #     - BACKUP_CRON_EXPRESSION=50 16 * * 4
+  #     - BACKUP_FILENAME=openldap-database-backup-db-%Y-%m-%dT%H-%M-%S.tar.gz
+  #     - BACKUP_RETENTION_DAYS=30
+  #     # - NOTIFICATION_URLS=smtp://somesmtp:25/?fromAddress=backup@example.com&toAddresses=chistousov@example.com
+  #     - EXEC_FORWARD_OUTPUT=true
+  #     - BACKUP_STOP_CONTAINER_LABEL=openldap-database-backup-db-stop-label
+  #   volumes:
+  #     # что backupИТЬ
+  #     - type: volume
+  #       source: openldap-database-volume
+  #       target: /backup
+  #       read_only: true
+      
+  #     - type: bind
+  #       source: /var/run/docker.sock
+  #       target: /var/run/docker.sock
+  #       read_only: true
+
+  #     # куда backupИТЬ
+  #     - type: volume
+  #       source: openldap-database-backup-volume
+  #       target: /archive
+
+  #     - type: bind
+  #       source: /etc/timezone
+  #       target: /etc/timezone
+  #       read_only: true
+
+  #     - type: bind
+  #       source: /etc/localtime
+  #       target: /etc/localtime
+  #       read_only: true
+
+  openldap:
+    image: osixia/openldap:latest
+    container_name: openldap
+    environment:
+      LDAP_ORGANISATION: ${LDAP_ORGANISATION}
+      LDAP_DOMAIN: "${LDAP_DOMAIN}"
+      LDAP_BASE_DN: "${LDAP_BASE_DN}"
+      LDAP_ADMIN_PASSWORD: ${LDAP_ADMIN_PASSWORD}
+      LDAP_CONFIG_PASSWORD: ${LDAP_CONFIG_PASSWORD}
+      LDAP_READONLY_USER: true
+      LDAP_READONLY_USER_PASSWORD: ${LDAP_READONLY_USER_PASSWORD}
+    mem_limit: 512M
+    healthcheck:
+      test: '[ -e /run/slapd/slapd.pid ] || exit 1'
+      interval: 30s
+      timeout: 30s
+      retries: 100
+    volumes:
+
+      - type: volume
+        source: openldap-database-volume
+        target: /var/lib/ldap/
+
+      - type: volume
+        source: openldap-config-volume
+        target: /etc/ldap/slapd.d/
+
+      - type: volume
+        source: openldap-certs-volume
+        target: /container/service/slapd/assets/certs
+
+      - type: bind
+        source: /etc/timezone
+        target: /etc/timezone
+        read_only: true
+
+      - type: bind
+        source: /etc/localtime
+        target: /etc/localtime
+        read_only: true
+
+      - type: bind
+        source: ./openldap/init
+        target: /container/service/slapd/assets/config/bootstrap/ldif/custom
+        read_only: true
+
+    command: "--copy-service --loglevel debug"
+    labels:
+      # This means the container will be stopped during backup to ensure
+      # backup integrity. You can omit this label if stopping during backup
+      # not required.
+      - docker-volume-backup.stop-during-backup=openldap-config-backup-db-stop-label
+      - docker-volume-backup.stop-during-backup=openldap-database-backup-db-stop-label
+    restart: unless-stopped
+    # depends_on:
+    #   openldap-restore-config-backup-db:
+    #     condition: service_completed_successfully
+    #   openldap-restore-database-backup-db:
+    #     condition: service_completed_successfully
+    networks:
+      - kdc-network
+    
+  openldap-phpldapadmin:
+    image: osixia/phpldapadmin:latest
+    container_name: openldap-phpldapadmin
+    restart: unless-stopped
+    environment: 
+      PHPLDAPADMIN_LDAP_HOSTS: openldap
+      PHPLDAPADMIN_HTTPS: false
+      PHPLDAPADMIN_SERVER_PATH: /
+      # PHPLDAPADMIN_TRUST_PROXY_SSL: true
+    mem_limit: 128M
+    ports:
+      - 9876:80
+    depends_on:
+      openldap:
+        condition: service_healthy
+    networks:
+      - kdc-network
+
+  # # restore database db from backup
+  # kdc-restore-database-backup-db:
+  #   image: alpine:3.18.0
+  #   entrypoint: ["/bin/sh", "-c", "/restore-backup.sh && touch /OK"] 
+  #   restart: on-failure
+  #   container_name: kdc-restore-database-backup-db
+  #   volumes:
+  #     - type: bind
+  #       source: restore-backup.sh
+  #       target: /restore-backup.sh
+  #       read_only: true
+
+  #     - type: volume
+  #       source: kdc-backup-volume
+  #       target: /archive
+
+  #     - type: volume
+  #       source: kdc-volume
+  #       target: /backup
+  #   healthcheck:
+  #     test: '[ -f ./OK ] || exit 1'
+  #     interval: 1m
+  #     timeout: 10s
+  #     retries: 100
+
+  # # backup
+  # kdc-database-backup-db:
+  #   image: offen/docker-volume-backup:v2.27.0
+  #   restart: always
+  #   container_name: kdc-database-backup-db
+  #   environment:
+  #     - BACKUP_CRON_EXPRESSION=50 16 * * 4
+  #     - BACKUP_FILENAME=kdc-database-backup-db-%Y-%m-%dT%H-%M-%S.tar.gz
+  #     - BACKUP_RETENTION_DAYS=30
+  #     # - NOTIFICATION_URLS=smtp://somesmtp:25/?fromAddress=backup@example.com&toAddresses=chistousov@example.com
+  #     - EXEC_FORWARD_OUTPUT=true
+  #     - BACKUP_STOP_CONTAINER_LABEL=kdc-database-backup-db-stop-label
+  #   volumes:
+  #     # что backupИТЬ
+  #     - type: volume
+  #       source: kdc-volume
+  #       target: /backup
+  #       read_only: true
+      
+  #     - type: bind
+  #       source: /var/run/docker.sock
+  #       target: /var/run/docker.sock
+  #       read_only: true
+
+  #     # куда backupИТЬ
+  #     - type: volume
+  #       source: kdc-backup-volume
+  #       target: /archive
+
+  #     - type: bind
+  #       source: /etc/timezone
+  #       target: /etc/timezone
+  #       read_only: true
+
+  #     - type: bind
+  #       source: /etc/localtime
+  #       target: /etc/localtime
+  #       read_only: true
+
+  kdc:
+    image: chistousov/kerberos5:1.0.0
+    container_name: kdc
+    environment:
+
+      PORTS: 750
+
+      REALM: ${LDAP_DOMAIN_UPPER}
+      LDAP_BASE_DN: ${LDAP_BASE_DN}
+      ENCRYPTION_TYPE: ${ENCRYPTION_TYPE_1}
+      SUPPORTED_ENCRYPTION_TYPES: ${ENCRYPTION_TYPE_1}:normal
+      
+      LDAP_KDC_DN: cn=readonly,${LDAP_BASE_DN}
+      LDAP_KDC_DN_PASSWORD: ${LDAP_READONLY_USER_PASSWORD}
+
+      LDAP_KADMIND_DN: cn=admin,${LDAP_BASE_DN}
+      LDAP_KADMIND_DN_PASSWORD: ${LDAP_ADMIN_PASSWORD}
+
+      LDAP_KERBEROS_CONTAINER_DN: cn=krbContainer,${LDAP_BASE_DN}
+      LDAP_SERVER: ldap://openldap:389
+
+    ports:
+      - 750:750
+      - 750:750/udp
+    mem_limit: 512M
+    volumes:
+
+      - type: bind
+        source: /dev/urandom
+        target: /dev/urandom
+        read_only: true
+
+      - type: bind
+        source: /etc/timezone
+        target: /etc/timezone
+        read_only: true
+
+      - type: bind
+        source: /etc/localtime
+        target: /etc/localtime
+        read_only: true
+
+      - type: volume
+        source: kdc-volume
+        target: /etc/krb5kdc
+
+    restart: unless-stopped
+    healthcheck:
+      test: '[ -e /krb5kdc.pid ] || exit 1'
+      interval: 30s
+      timeout: 30s
+      retries: 100
+    labels:
+      # This means the container will be stopped during backup to ensure
+      # backup integrity. You can omit this label if stopping during backup
+      # not required.
+      - docker-volume-backup.stop-during-backup=kdc-database-backup-db-stop-label
+    depends_on:
+      openldap:
+        condition: service_healthy
+      # kdc-restore-database-backup-db:
+      #   condition: service_completed_successfully
+    networks:
+      - kdc-network
+    # extra_hosts:
+    #   - "example.com:172.20.23.3"
+    #   - "someuser1:172.20.23.1"
+    #   - "someservice2:172.20.23.2"
+
+
+networks:
+  kdc-network:
+
+volumes:
+  openldap-database-volume:
+  openldap-config-volume:
+  openldap-certs-volume:
+  
+  kdc-volume:
+  
+  # openldap-database-backup-volume:
+  #   driver: local
+  #   driver_opts:
+  #     type: cifs
+  #     device: //192.168.0.102/backup/openldap/database
+  #     o: addr=192.168.0.102,user=somesmbuser,password=qwerty,file_mode=0700,dir_mode=0700
+  # openldap-config-backup-volume:
+  #   driver: local
+  #   driver_opts:
+  #     type: cifs
+  #     device: //192.168.0.102/backup/openldap/config
+  #     o: addr=192.168.0.102,user=somesmbuser,password=qwerty,file_mode=0700,dir_mode=0700
+  
+  # kdc-backup-volume:
+  #   driver: local
+  #   driver_opts:
+  #     type: cifs
+  #     device: //192.168.0.102/backup/kdc
+  #     o: addr=192.168.0.102,user=somesmbuser,password=qwerty,file_mode=0700,dir_mode=0700
+
+# Windows Active Directory
+# addr=172.20.22.3,dom=someaddomain,user=someuser,password=somepass,vers=1.0,file_mode=0777,dir_mode=0777
